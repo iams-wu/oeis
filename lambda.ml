@@ -1,3 +1,27 @@
+(*
+
+lambda rooted skeletons -- big schroeder numbers
+oeis.org/A006318
+
+little schroeder numbers
+oeis.org/A001003
+
+any rooted terms (grygiel/lescanne)
+oeis.org/A220894
+
+lambda rooted terms
+oeis.org/A220895
+
+any rooted terms (tromp)
+oeis.org/A195691
+
+C n k
+oeis.org/a091894
+
+C n
+oeis.org/a000108
+
+ *)
 type leaf =
   | Place
   | X of int
@@ -300,7 +324,94 @@ let locally_index tree =
   li 0 false tree
 ;;
 
+let maybe_replace_leaf stp c =
+  let rec mrl stp c =
+    match c with
+    | A ( F Place, F Place) -> (match stp with
+                                   | F Place :: r :: stp ->
+                                      Some (A(F Place, r)), stp 
+                                      
+                                   | l :: F Place :: stp ->
+                                      Some (A(l, F Place)), stp
+                                      
+                                   | _ -> None, stp)
+                                 
+    | A ( l , r ) -> (let l, stp = mrl stp l in
+                     let r, stp = mrl stp r in
+                     match l, r with
+                     | None, _ | _, None -> None, stp
+                     | Some l, Some r -> 
+                        Some (A (l, r)), stp)
+       
+    | F Place -> Some (List.hd stp), List.tl stp
 
+    | _ -> Some c, stp
+  in
+  mrl stp c |> fst
+;;
+
+let rec some_list xs =
+  match xs with
+  | Some x :: xs -> x :: some_list xs
+  | None :: xs -> some_list xs
+  | [] -> []
+;;
+
+let maybe_replace_leafs cs stps =
+  let rec rl a stps =
+    match stps with
+    | stp :: stps ->
+       let stp = List.map (maybe_replace_leaf stp) cs in
+       rl (stp @ a) stps
+
+    | [] -> some_list a
+  in
+  rl [] stps
+;;
+
+let n_cache = ref emptymap ;;
+let rec normalized n =
+  match n <= 0 with
+  | true -> [F Place]
+  | false ->
+     let a = ref (
+                   (List.map
+                      (abstract)
+                      (normalized (n-1))
+                   )
+               )
+     in
+     let _ = for i = 1 to n - 1 do
+               let cs = c i in
+               let mcs = mc (n-i-1) (i+1) in
+               let subtree_permutations = mcs
+                                          |> List.map
+                                               (fun mc -> mc |> List.map l |> combine_all)
+                                          |> List.flatten
+               in
+               a :=
+                 (maybe_replace_leafs cs subtree_permutations
+                  |> List.map abstract
+                  |> function
+                    | [] -> cs
+                    | x -> x)
+                 @ !a
+             done
+     in
+     let k = string_of_int n in
+     let _ = l_cache := IMap.add k !a !l_cache in
+     !a      
+;;
+
+let a006318 n = l n |>  List.map lchr ;;
+let q_unappliable n = normalized n |> List.map lchr ;;
+  
+let a220895 n = l n |> List.map globally_index |> List.flatten |> List.map lchr ;;
+let a220894 n = l n @ a n |> List.map globally_index |> List.flatten |> List.map lchr ;;
+
+let q n = normalized n |> List.map globally_index |> List.flatten |> List.map lchr ;;  
+
+  
   ()
 
            
